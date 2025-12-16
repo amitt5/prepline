@@ -47,8 +47,9 @@ const mockAnalyses = [
   },
 ]
 
-export default function CustomerDetailPage({ params }: { params: { id: string } }) {
-  const customerName = params.id
+export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const customerName = id
     .split("-")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ")
@@ -101,7 +102,7 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                 <CardTitle>Analyses ({mockAnalyses.length})</CardTitle>
-                <GenerateAnalysisModal customerId={params.id} files={mockFiles} />
+                <GenerateAnalysisModal customerId={id} files={mockFiles} />
               </CardHeader>
               <CardContent className="space-y-4">
                 {mockAnalyses.map((analysis) => (
@@ -112,7 +113,7 @@ export default function CustomerDetailPage({ params }: { params: { id: string } 
                     </div>
                     <p className="text-sm">{analysis.preview}</p>
                     <div className="flex gap-2">
-                      <Link href={`/customer/${params.id}/analysis/${analysis.id}`} className="flex-1">
+                      <Link href={`/customer/${id}/analysis/${analysis.id}`} className="flex-1">
                         <Button variant="outline" size="sm" className="w-full bg-transparent">
                           <Eye className="w-4 h-4 mr-2" />
                           View Full Analysis

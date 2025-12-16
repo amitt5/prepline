@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ArrowLeft, Download } from "lucide-react"
 
-export default function AnalysisViewPage({ params }: { params: { id: string; analysisId: string } }) {
-  const customerName = params.id
+export default async function AnalysisViewPage({ params }: { params: Promise<{ id: string; analysisId: string }> }) {
+  const { id, analysisId } = await params
+  const customerName = id
     .split("-")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ")
@@ -17,7 +18,7 @@ export default function AnalysisViewPage({ params }: { params: { id: string; ana
         <div className="flex flex-col gap-6 max-w-4xl mx-auto">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <Link href={`/customer/${params.id}`}>
+              <Link href={`/customer/${id}`}>
                 <Button variant="ghost" size="icon">
                   <ArrowLeft className="h-5 w-5" />
                   <span className="sr-only">Back to {customerName}</span>
