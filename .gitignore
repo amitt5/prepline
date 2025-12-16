@@ -13,3 +13,9 @@ pnpm-lock.yaml
 .pnpm-store
 .yarn-integrity
 
+# Next.js
+.next/
+out/
+build/
+dist/
+
