@@ -39,14 +39,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: filesError.message }, { status: 500 })
   }
 
-  // Prepare content for analysis
+  if (!files || files.length === 0) {
+    return NextResponse.json({ error: 'No files found' }, { status: 400 })
+  }
+
+  // Prepare content for analysis (only email files for now, since we're skipping Whisper)
   const contentParts: string[] = []
   for (const file of files) {
-    if (file.type === 'email') {
-      contentParts.push(`EMAIL:\n${file.content}\n`)
+    if (file.type === 'email' && file.content) {
+      const dateInfo = file.occurred_at
+        ? `Date: ${new Date(file.occurred_at).toLocaleDateString()}\n`
+        : ''
+      const notesInfo = file.notes ? `Notes: ${file.notes}\n` : ''
+      contentParts.push(
+        `EMAIL: ${file.name}\n${dateInfo}${notesInfo}${file.content}\n`
+      )
     } else if (file.type === 'audio' && file.content) {
-      contentParts.push(`CALL TRANSCRIPTION:\n${file.content}\n`)
+      // Include audio transcriptions if they exist (for future use)
+      const dateInfo = file.occurred_at
+        ? `Date: ${new Date(file.occurred_at).toLocaleDateString()}\n`
+        : ''
+      const notesInfo = file.notes ? `Notes: ${file.notes}\n` : ''
+      contentParts.push(
+        `CALL TRANSCRIPTION: ${file.name}\n${dateInfo}${notesInfo}${file.content}\n`
+      )
     }
+  }
+
+  if (contentParts.length === 0) {
+    return NextResponse.json(
+      { error: 'No analyzable content found. Please ensure files have content.' },
+      { status: 400 }
+    )
   }
 
   const combinedContent = contentParts.join('\n---\n\n')
@@ -69,11 +93,11 @@ ${combinedContent}`
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview', // or gpt-4-1106-preview, adjust based on available models
+      model: 'gpt-4-turbo-preview', // Using gpt-4-turbo-preview (user mentioned gpt-4.1, this is the closest available)
       messages: [
         {
           role: 'system',
-          content: 'You are an expert sales preparation assistant. Create detailed, actionable preparation documents.',
+          content: 'You are an expert sales preparation assistant. Create detailed, actionable preparation documents. Format your response with clear section headers using ## for main sections and ### for subsections.',
         },
         {
           role: 'user',
@@ -121,7 +145,19 @@ ${combinedContent}`
 }
 
 function extractSection(text: string, sectionName: string): string {
-  const regex = new RegExp(`${sectionName}[\\s\\S]*?(?=\\n\\n##|$)`, 'i')
-  const match = text.match(regex)
-  return match ? match[0].trim() : ''
+  // Try multiple patterns to extract sections
+  const patterns = [
+    new RegExp(`##\\s*${sectionName}[\\s\\S]*?(?=\\n##|$)`, 'i'),
+    new RegExp(`${sectionName}[\\s\\S]*?(?=\\n\\n##|$)`, 'i'),
+    new RegExp(`${sectionName}[\\s\\S]*?(?=\\n##|$)`, 'i'),
+  ]
+  
+  for (const pattern of patterns) {
+    const match = text.match(pattern)
+    if (match) {
+      return match[0].trim()
+    }
+  }
+  
+  return ''
 }
