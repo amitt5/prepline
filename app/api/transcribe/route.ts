@@ -1,6 +1,11 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/client'
+import { AssemblyAI } from 'assemblyai'
+
+const client = new AssemblyAI({
+  apiKey: process.env.ASSEMBLYAI_API_KEY!,
+})
 
 export async function POST(request: Request) {
   const { userId } = await auth()
@@ -22,6 +27,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'File not found' }, { status: 404 })
   }
 
+  // Check if already transcribed
+  if (file.content) {
+    return NextResponse.json({ 
+      transcription: file.content, 
+      file,
+      message: 'File already transcribed' 
+    })
+  }
+
   // Download file from storage
   const { data: fileData, error: downloadError } = await supabaseAdmin.storage
     .from('audio-files')
@@ -35,28 +49,25 @@ export async function POST(request: Request) {
   const arrayBuffer = await fileData.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
 
-  // Call local Whisper API
-  const whisperUrl = process.env.WHISPER_API_URL || 'http://localhost:8000'
-  const formData = new FormData()
-  const blob = new Blob([buffer])
-  formData.append('file', blob, file.name)
-
   try {
-    const whisperResponse = await fetch(`${whisperUrl}/transcribe`, {
-      method: 'POST',
-      body: formData,
+    // Upload file to AssemblyAI
+    const uploadResponse = await client.files.upload(buffer)
+    
+    // Transcribe the file
+    const transcript = await client.transcripts.transcribe({
+      audio: uploadResponse,
     })
 
-    if (!whisperResponse.ok) {
-      throw new Error('Whisper transcription failed')
+    if (transcript.status === 'error') {
+      throw new Error(transcript.error || 'Transcription failed')
     }
 
-    const { text } = await whisperResponse.json()
+    const transcriptionText = transcript.text || ''
 
     // Update file with transcription
     const { data: updatedFile, error: updateError } = await supabaseAdmin
       .from('files')
-      .update({ content: text })
+      .update({ content: transcriptionText })
       .eq('id', fileId)
       .select()
       .single()
@@ -65,7 +76,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
-    return NextResponse.json({ transcription: text, file: updatedFile })
+    return NextResponse.json({ transcription: transcriptionText, file: updatedFile })
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Transcription failed' },

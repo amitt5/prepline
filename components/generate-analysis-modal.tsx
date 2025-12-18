@@ -20,6 +20,7 @@ interface FileItem {
   name: string
   date: string
   type: "audio" | "email"
+  content?: string | null
 }
 
 export function GenerateAnalysisModal({ customerId, files }: { customerId: string; files: FileItem[] }) {
@@ -120,11 +121,11 @@ export function GenerateAnalysisModal({ customerId, files }: { customerId: strin
             )}
           </div>
           <p className="text-sm text-muted-foreground mt-4">
-            Note: Currently analyzing email threads only. Audio transcription coming soon.
+            Analysis will include email threads and transcribed audio files.
           </p>
-          {files.filter((f) => f.type === "email").length === 0 && files.length > 0 && (
+          {files.filter((f) => f.type === "audio" && !f.content).length > 0 && (
             <p className="text-sm text-amber-500 mt-2">
-              ⚠️ No email files found. Please upload email threads to generate an analysis.
+              ⚠️ Some audio files are still being transcribed. They will be included once transcription completes.
             </p>
           )}
         </div>

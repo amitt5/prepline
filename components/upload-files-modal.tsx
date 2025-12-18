@@ -57,7 +57,8 @@ export function UploadFilesModal({ customerId, customerName }: UploadFilesModalP
     try {
       setIsSubmitting(true)
 
-      // Upload audio files
+      // Upload audio files and trigger transcription
+      const uploadedFileIds: string[] = []
       for (const file of files) {
         const formData = new FormData()
         formData.append("file", file)
@@ -73,6 +74,25 @@ export function UploadFilesModal({ customerId, customerName }: UploadFilesModalP
           const data = await response.json().catch(() => ({}))
           throw new Error(data.error || "Failed to upload audio file")
         }
+
+        const fileRecord = await response.json()
+        if (fileRecord?.id) {
+          uploadedFileIds.push(fileRecord.id)
+        }
+      }
+
+      // Trigger transcription for uploaded audio files (fire and forget)
+      for (const fileId of uploadedFileIds) {
+        fetch("/api/transcribe", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ fileId }),
+        }).catch((err) => {
+          console.error("Failed to trigger transcription:", err)
+          // Don't fail the upload if transcription fails
+        })
       }
 
       // Upload email content as a separate file record

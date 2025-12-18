@@ -15,6 +15,7 @@ type FileRecord = {
   file_size?: number | null
   occurred_at?: string | null
   created_at?: string | null
+  content?: string | null
 }
 
 type AnalysisRecord = {
@@ -160,6 +161,11 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                           <p className="text-sm font-medium truncate">{file.name}</p>
                           {file.type === "audio" && file.sizeLabel && (
                             <p className="text-xs text-muted-foreground">{file.sizeLabel}</p>
+                          )}
+                          {file.type === "audio" && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {file.content ? "✓ Transcribed" : "⏳ Transcribing..."}
+                            </p>
                           )}
                         </div>
                       </div>
