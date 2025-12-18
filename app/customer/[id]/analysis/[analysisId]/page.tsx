@@ -1,15 +1,122 @@
 import Link from "next/link"
+import { auth } from "@clerk/nextjs/server"
 import { Header } from "@/components/header"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { ArrowLeft, Download } from "lucide-react"
+import { supabaseAdmin } from "@/lib/supabase/client"
+
+function formatDate(dateString?: string | null) {
+  if (!dateString) return ""
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return ""
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+}
+
+// Helper to parse markdown-like sections and render them
+function parseSection(content: string | null | undefined): string {
+  if (!content) return ""
+  // Remove section headers if they exist (## Section Name)
+  return content.replace(/^##\s*[^\n]+\n?/gm, "").trim()
+}
+
+// Helper to extract bullet points from text
+function extractBulletPoints(text: string): string[] {
+  const lines = text.split("\n")
+  const bullets: string[] = []
+  for (const line of lines) {
+    const trimmed = line.trim()
+    // Match various bullet formats: •, -, *, or numbered
+    if (/^[•\-\*]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
+      bullets.push(trimmed.replace(/^[•\-\*\d\.]\s+/, ""))
+    } else if (trimmed && !trimmed.startsWith("#") && trimmed.length > 10) {
+      // Also include substantial non-header lines
+      bullets.push(trimmed)
+    }
+  }
+  return bullets.length > 0 ? bullets : [text]
+}
 
 export default async function AnalysisViewPage({ params }: { params: Promise<{ id: string; analysisId: string }> }) {
+  const { userId } = await auth()
+  if (!userId) {
+    return null
+  }
+
   const { id, analysisId } = await params
-  const customerName = id
-    .split("-")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ")
+
+  // Load customer to verify ownership and get name
+  const { data: customer, error: customerError } = await supabaseAdmin
+    .from("customers")
+    .select("*")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .single()
+
+  if (customerError || !customer) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-4 py-8">
+          <div className="flex items-center gap-4 mb-6">
+            <Link href="/dashboard">
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            </Link>
+            <h1 className="text-2xl font-bold">Customer not found</h1>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  const customerName = customer.name ?? "Customer"
+
+  // Load analysis
+  const { data: analysis, error: analysisError } = await supabaseAdmin
+    .from("analyses")
+    .select("*")
+    .eq("id", analysisId)
+    .eq("customer_id", id)
+    .single()
+
+  if (analysisError || !analysis) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-4 py-8">
+          <div className="flex items-center gap-4 mb-6">
+            <Link href={`/customer/${id}`}>
+              <Button variant="ghost" size="icon">
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            </Link>
+            <h1 className="text-2xl font-bold">Analysis not found</h1>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            This analysis doesn&apos;t exist or you don&apos;t have access to it.
+          </p>
+        </main>
+      </div>
+    )
+  }
+
+  const analysisDate = formatDate(analysis.created_at)
+  const filesCount = Array.isArray(analysis.files_analyzed) ? analysis.files_analyzed.length : 0
+  const content = analysis.content || {}
+
+  // Extract sections from content
+  const tldr = parseSection(content.tldr || content.fullText?.split("##")[0] || "")
+  const stakeholders = parseSection(content.stakeholders || "")
+  const dealStatus = parseSection(content.dealStatus || "")
+  const nextCallStrategy = parseSection(content.nextCallStrategy || "")
+  const competitiveContext = parseSection(content.competitiveContext || "")
+  const risks = parseSection(content.risks || "")
+  const fullText = content.fullText || ""
+
+  // If we have fullText but no parsed sections, try to extract from fullText
+  const hasParsedSections = !!(content.tldr || content.stakeholders || content.dealStatus)
 
   return (
     <div className="min-h-screen bg-background">
@@ -25,8 +132,8 @@ export default async function AnalysisViewPage({ params }: { params: Promise<{ i
                 </Button>
               </Link>
               <div>
-                <h1 className="text-2xl font-bold">Analysis · Dec 15, 2024</h1>
-                <p className="text-sm text-muted-foreground">Analyzed 4 files</p>
+                <h1 className="text-2xl font-bold">Analysis · {analysisDate || "Unknown date"}</h1>
+                <p className="text-sm text-muted-foreground">Analyzed {filesCount} file{filesCount !== 1 ? "s" : ""}</p>
               </div>
             </div>
             <Button>
@@ -39,215 +146,80 @@ export default async function AnalysisViewPage({ params }: { params: Promise<{ i
             <CardContent className="p-8 prose prose-invert max-w-none">
               <div className="space-y-8">
                 {/* TL;DR Section */}
-                <section>
-                  <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">TL;DR</h2>
-                  <ul className="space-y-2 list-none pl-0">
-                    <li className="flex gap-2">
-                      <span className="text-primary">•</span>
-                      <span>Key decision maker Eva (CFO) is concerned about pricing flexibility</span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="text-primary">•</span>
-                      <span>Technical champion Sarah is sold, but needs exec buy-in</span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="text-primary">•</span>
-                      <span>Deal is stalled on custom integration requirements</span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="text-primary">•</span>
-                      <span>Competitor "CompetitorCo" is also being evaluated</span>
-                    </li>
-                    <li className="flex gap-2">
-                      <span className="text-primary">•</span>
-                      <span>Next call objective: Address CFO concerns, present integration timeline</span>
-                    </li>
-                  </ul>
-                </section>
+                {tldr && (
+                  <section>
+                    <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">TL;DR</h2>
+                    <ul className="space-y-2 list-none pl-0">
+                      {extractBulletPoints(tldr).map((point, idx) => (
+                        <li key={idx} className="flex gap-2">
+                          <span className="text-primary">•</span>
+                          <span>{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
 
                 {/* Stakeholder Map Section */}
-                <section>
-                  <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">Stakeholder Map</h2>
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">Eva Chen - CFO</h3>
-                      <div className="space-y-1 text-sm">
-                        <p>
-                          <strong>Authority:</strong> Final decision maker
-                        </p>
-                        <p>
-                          <strong>Cares about:</strong> ROI, pricing predictability, integration costs
-                        </p>
-                        <p>
-                          <strong>Quote:</strong>{" "}
-                          <span className="italic">
-                            "We need to understand the total cost of ownership" [Call Dec 15, 18:32]
-                          </span>
-                        </p>
-                        <p>
-                          <strong>Concerns:</strong>
-                        </p>
-                        <ul className="list-disc pl-6 space-y-1">
-                          <li>Unclear pricing for enterprise tier</li>
-                          <li>Implementation timeline risks</li>
-                        </ul>
-                        <p>
-                          <strong>Engagement strategy:</strong> Prepare detailed ROI analysis, offer phased rollout
-                        </p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">Sarah Kim - VP Engineering</h3>
-                      <div className="space-y-1 text-sm">
-                        <p>
-                          <strong>Authority:</strong> Technical champion, high influence
-                        </p>
-                        <p>
-                          <strong>Cares about:</strong> API capabilities, security, developer experience
-                        </p>
-                        <p>
-                          <strong>Quote:</strong>{" "}
-                          <span className="italic">
-                            "The API docs look solid, but we need to test SSO" [Call Dec 8, 22:15]
-                          </span>
-                        </p>
-                        <p>
-                          <strong>Status:</strong> Internally advocating for solution
-                        </p>
-                        <p>
-                          <strong>Engagement strategy:</strong> Provide SSO implementation guide, offer technical
-                          deep-dive
-                        </p>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="text-xl font-semibold mb-2">Michael Torres - Director of Sales Operations</h3>
-                      <div className="space-y-1 text-sm">
-                        <p>
-                          <strong>Authority:</strong> End user, influences decision
-                        </p>
-                        <p>
-                          <strong>Cares about:</strong> Ease of use, team adoption, reporting capabilities
-                        </p>
-                        <p>
-                          <strong>Quote:</strong>{" "}
-                          <span className="italic">"My team needs something they can use day one" [Email Dec 12]</span>
-                        </p>
-                        <p>
-                          <strong>Status:</strong> Cautiously optimistic, wants to see demos
-                        </p>
-                        <p>
-                          <strong>Engagement strategy:</strong> Schedule hands-on demo with sales team, share onboarding
-                          timeline
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </section>
+                {stakeholders && (
+                  <section>
+                    <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">Stakeholder Map</h2>
+                    <div className="space-y-6 whitespace-pre-wrap text-sm">{stakeholders}</div>
+                  </section>
+                )}
 
                 {/* Deal Status & Blockers */}
-                <section>
-                  <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">Deal Status & Blockers</h2>
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-2">What's working:</h3>
-                      <ul className="list-disc pl-6 space-y-1">
-                        <li>Strong technical fit confirmed</li>
-                        <li>Champion actively selling internally</li>
-                        <li>Timeline aligns with their Q1 goals</li>
-                      </ul>
-                    </div>
-
-                    <div>
-                      <h3 className="text-lg font-semibold mb-2">What's stalling:</h3>
-                      <ul className="list-disc pl-6 space-y-1">
-                        <li>CFO hasn't seen pricing justification</li>
-                        <li>Custom Salesforce integration not scoped</li>
-                        <li>Security review pending</li>
-                      </ul>
-                    </div>
-
-                    <div>
-                      <h3 className="text-lg font-semibold mb-2">Unanswered questions:</h3>
-                      <ul className="list-disc pl-6 space-y-1">
-                        <li>"Can you support our custom SSO provider?" [Email Dec 14]</li>
-                        <li>"What's your SLA for enterprise?" [Call Dec 15, 31:20]</li>
-                      </ul>
-                    </div>
-                  </div>
-                </section>
+                {dealStatus && (
+                  <section>
+                    <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">Deal Status & Blockers</h2>
+                    <div className="space-y-4 whitespace-pre-wrap text-sm">{dealStatus}</div>
+                  </section>
+                )}
 
                 {/* Next Call Strategy */}
-                <section>
-                  <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">Next Call Strategy</h2>
-                  <div className="space-y-4">
-                    <p>
-                      <strong>Primary objective:</strong> Get CFO comfortable with pricing and secure commitment to
-                      security review
-                    </p>
-
-                    <div>
-                      <h3 className="text-lg font-semibold mb-2">Key questions to ask:</h3>
-                      <ol className="list-decimal pl-6 space-y-1">
-                        <li>"What specific ROI metrics matter most for your Q1 budget approval?"</li>
-                        <li>"Who needs to sign off on the security review, and what's their timeline?"</li>
-                        <li>"If we can solve the Salesforce integration, what's your ideal go-live date?"</li>
-                      </ol>
-                    </div>
-
-                    <div>
-                      <h3 className="text-lg font-semibold mb-2">Proof points to provide:</h3>
-                      <ul className="list-disc pl-6 space-y-1">
-                        <li>Case study: Similar company reduced sales cycle by 40%</li>
-                        <li>Integration timeline: 2-week standard implementation</li>
-                        <li>Security: SOC 2 Type II compliance documentation</li>
-                      </ul>
-                    </div>
-
-                    <div>
-                      <h3 className="text-lg font-semibold mb-2">Objections to pre-empt:</h3>
-                      <ul className="list-disc pl-6 space-y-1">
-                        <li>"Pricing seems high" → Show 6-month ROI calculation</li>
-                        <li>"Implementation takes too long" → Offer dedicated onboarding engineer</li>
-                      </ul>
-                    </div>
-                  </div>
-                </section>
+                {nextCallStrategy && (
+                  <section>
+                    <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">Next Call Strategy</h2>
+                    <div className="space-y-4 whitespace-pre-wrap text-sm">{nextCallStrategy}</div>
+                  </section>
+                )}
 
                 {/* Competitive Context */}
-                <section>
-                  <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">Competitive Context</h2>
-                  <div className="space-y-4">
-                    <div>
-                      <h3 className="text-lg font-semibold mb-2">Alternatives being considered:</h3>
-                      <ul className="list-disc pl-6 space-y-1">
-                        <li>CompetitorCo (mentioned in email Dec 12)</li>
-                        <li>Building in-house (Sarah mentioned "we could build this" [Call Dec 8, 45:10])</li>
-                      </ul>
-                    </div>
-
-                    <div>
-                      <h3 className="text-lg font-semibold mb-2">Your differentiation:</h3>
-                      <ul className="list-disc pl-6 space-y-1">
-                        <li>10x faster implementation than CompetitorCo</li>
-                        <li>Purpose-built for their use case vs. general-purpose tool</li>
-                        <li>Dedicated customer success vs. self-service only</li>
-                      </ul>
-                    </div>
-                  </div>
-                </section>
+                {competitiveContext && (
+                  <section>
+                    <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">Competitive Context</h2>
+                    <div className="space-y-4 whitespace-pre-wrap text-sm">{competitiveContext}</div>
+                  </section>
+                )}
 
                 {/* Key Risks */}
-                <section>
-                  <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">Key Risks</h2>
-                  <ul className="list-disc pl-6 space-y-1">
-                    <li>CFO may need more financial justification</li>
-                    <li>Security review could delay by 2-3 weeks</li>
-                    <li>Champion Sarah is supportive but doesn't control budget</li>
-                  </ul>
-                </section>
+                {risks && (
+                  <section>
+                    <h2 className="text-2xl font-bold mb-4 border-b border-border pb-2">Key Risks</h2>
+                    <div className="whitespace-pre-wrap text-sm">
+                      {risks.split("\n").map((line, idx) => {
+                        const trimmed = line.trim()
+                        if (!trimmed) return null
+                        if (/^[•\-\*]\s+/.test(trimmed) || /^\d+\.\s+/.test(trimmed)) {
+                          return (
+                            <div key={idx} className="flex gap-2 mb-1">
+                              <span className="text-primary">•</span>
+                              <span>{trimmed.replace(/^[•\-\*\d\.]\s+/, "")}</span>
+                            </div>
+                          )
+                        }
+                        return <div key={idx}>{line}</div>
+                      })}
+                    </div>
+                  </section>
+                )}
+
+                {/* Fallback: If no parsed sections, show full text */}
+                {!hasParsedSections && fullText && (
+                  <section>
+                    <div className="whitespace-pre-wrap text-sm">{fullText}</div>
+                  </section>
+                )}
               </div>
             </CardContent>
           </Card>
