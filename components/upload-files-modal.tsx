@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -18,11 +19,20 @@ import { Textarea } from "@/components/ui/textarea"
 import { Upload, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-export function UploadFilesModal({ customerName }: { customerName: string }) {
+interface UploadFilesModalProps {
+  customerId: string
+  customerName: string
+}
+
+export function UploadFilesModal({ customerId, customerName }: UploadFilesModalProps) {
+  const router = useRouter()
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
   const [files, setFiles] = useState<File[]>([])
   const [emailText, setEmailText] = useState("")
+  const [occurredAt, setOccurredAt] = useState("")
+  const [notes, setNotes] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -34,15 +44,73 @@ export function UploadFilesModal({ customerName }: { customerName: string }) {
     setFiles(files.filter((_, i) => i !== index))
   }
 
-  const handleUpload = () => {
-    // Mock behavior: show success toast
-    toast({
-      title: "Files uploaded successfully",
-      description: `${files.length} file(s) uploaded for ${customerName}`,
-    })
-    setOpen(false)
+  const resetState = () => {
     setFiles([])
     setEmailText("")
+    setOccurredAt("")
+    setNotes("")
+  }
+
+  const handleUpload = async () => {
+    if (files.length === 0 && !emailText.trim()) return
+
+    try {
+      setIsSubmitting(true)
+
+      // Upload audio files
+      for (const file of files) {
+        const formData = new FormData()
+        formData.append("file", file)
+        if (occurredAt) formData.append("occurredAt", occurredAt)
+        if (notes.trim()) formData.append("notes", notes.trim())
+
+        const response = await fetch(`/api/customers/${customerId}/files`, {
+          method: "POST",
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}))
+          throw new Error(data.error || "Failed to upload audio file")
+        }
+      }
+
+      // Upload email content as a separate file record
+      if (emailText.trim()) {
+        const formData = new FormData()
+        formData.append("emailContent", emailText.trim())
+        if (occurredAt) formData.append("occurredAt", occurredAt)
+        if (notes.trim()) formData.append("notes", notes.trim())
+
+        const response = await fetch(`/api/customers/${customerId}/files`, {
+          method: "POST",
+          body: formData,
+        })
+
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}))
+          throw new Error(data.error || "Failed to upload email thread")
+        }
+      }
+
+      toast({
+        title: "Upload complete",
+        description: `${files.length} audio file(s) and ${emailText.trim() ? "1 email thread" : "no emails"} uploaded for ${customerName}`,
+      })
+
+      setOpen(false)
+      resetState()
+      router.refresh()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Something went wrong during upload"
+      toast({
+        title: "Upload failed",
+        description: message,
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -59,6 +127,33 @@ export function UploadFilesModal({ customerName }: { customerName: string }) {
           <DialogDescription>Add call recordings and email threads to build comprehensive analysis.</DialogDescription>
         </DialogHeader>
         <div className="space-y-6 py-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="occurred-at">Conversation date &amp; time</Label>
+              <input
+                id="occurred-at"
+                type="datetime-local"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                value={occurredAt}
+                onChange={(e) => setOccurredAt(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                When this call or email conversation happened (optional but recommended).
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes (optional)</Label>
+              <Textarea
+                id="notes"
+                placeholder="Add any context like 'Pricing negotiation with Eva (CFO)'..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={3}
+                className="resize-none"
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label>Audio Files</Label>
             <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary transition-colors cursor-pointer">
@@ -104,11 +199,11 @@ export function UploadFilesModal({ customerName }: { customerName: string }) {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>
             Cancel
           </Button>
-          <Button onClick={handleUpload} disabled={files.length === 0 && !emailText.trim()}>
-            Upload {files.length > 0 && `${files.length} file(s)`}
+          <Button onClick={handleUpload} disabled={isSubmitting || (files.length === 0 && !emailText.trim())}>
+            {isSubmitting ? "Uploading..." : `Upload${files.length > 0 ? ` ${files.length} file(s)` : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>

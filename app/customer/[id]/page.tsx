@@ -136,7 +136,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
                 <CardTitle>Files ({typedFiles.length})</CardTitle>
-                <UploadFilesModal customerName={customerName} />
+                <UploadFilesModal customerId={id} customerName={customerName} />
               </CardHeader>
               <CardContent className="space-y-4">
                 {typedFiles.length === 0 ? (

@@ -62,8 +62,10 @@ export async function POST(
   }
 
   const formData = await request.formData()
-  const file = formData.get('file') as File
+  const file = formData.get('file') as File | null
   const emailContent = formData.get('emailContent') as string | null
+  const occurredAt = formData.get('occurredAt') as string | null
+  const notes = formData.get('notes') as string | null
 
   if (file) {
     // Upload to Supabase Storage
@@ -90,6 +92,8 @@ export async function POST(
         type: 'audio',
         storage_path: fileName,
         file_size: file.size,
+        occurred_at: occurredAt || null,
+        notes: notes || null,
       })
       .select()
       .single()
@@ -109,6 +113,8 @@ export async function POST(
         name: 'Email thread',
         type: 'email',
         content: emailContent,
+        occurred_at: occurredAt || null,
+        notes: notes || null,
       })
       .select()
       .single()
