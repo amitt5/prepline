@@ -12,7 +12,7 @@ pnpm-lock.yaml
 .yarn
 .pnpm-store
 .yarn-integrity
-
+.env.local
 # Next.js
 .next/
 out/
