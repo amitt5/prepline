@@ -188,7 +188,7 @@ export function UploadFilesModal({ customerId, customerName }: UploadFilesModalP
               <label htmlFor="file-upload" className="cursor-pointer">
                 <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm font-medium">Drag audio files here or click to browse</p>
-                <p className="text-xs text-muted-foreground mt-1">Supported: MP3, WAV, M4A (up to 10MB each)</p>
+                <p className="text-xs text-muted-foreground mt-1">Supported: MP3, WAV, M4A (up to 4MB each)</p>
               </label>
             </div>
             {files.length > 0 && (
