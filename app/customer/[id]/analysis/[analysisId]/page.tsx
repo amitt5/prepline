@@ -107,7 +107,8 @@ export default async function AnalysisViewPage({ params }: { params: Promise<{ i
   const content = analysis.content || {}
 
   // Extract sections from content
-  const tldr = parseSection(content.tldr || content.fullText?.split("##")[0] || "")
+  const tldr = parseSection(content.tldr || "")
+  // const tldr = parseSection(content.tldr || content.fullText?.split("##")[0] || "")
   const stakeholders = parseSection(content.stakeholders || "")
   const dealStatus = parseSection(content.dealStatus || "")
   const nextCallStrategy = parseSection(content.nextCallStrategy || "")
