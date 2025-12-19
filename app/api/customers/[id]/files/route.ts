@@ -64,6 +64,7 @@ export async function POST(
   const formData = await request.formData()
   const file = formData.get('file') as File | null
   const emailContent = formData.get('emailContent') as string | null
+  const transcriptContent = formData.get('transcriptContent') as string | null
   const occurredAt = formData.get('occurredAt') as string | null
   const notes = formData.get('notes') as string | null
 
@@ -126,5 +127,26 @@ export async function POST(
     return NextResponse.json(fileRecord)
   }
 
-  return NextResponse.json({ error: 'No file or email content provided' }, { status: 400 })
+  if (transcriptContent) {
+    const { data: fileRecord, error: dbError } = await supabaseAdmin
+      .from('files')
+      .insert({
+        customer_id: id,
+        name: 'Transcript',
+        type: 'transcript',
+        content: transcriptContent,
+        occurred_at: occurredAt || null,
+        notes: notes || null,
+      })
+      .select()
+      .single()
+
+    if (dbError) {
+      return NextResponse.json({ error: dbError.message }, { status: 500 })
+    }
+
+    return NextResponse.json(fileRecord)
+  }
+
+  return NextResponse.json({ error: 'No file, email content, or transcript content provided' }, { status: 400 })
 }

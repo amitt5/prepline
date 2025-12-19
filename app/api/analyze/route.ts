@@ -43,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No files found' }, { status: 400 })
   }
 
-  // Prepare content for analysis (only email files for now, since we're skipping Whisper)
+  // Prepare content for analysis
   const contentParts: string[] = []
   for (const file of files) {
     if (file.type === 'email' && file.content) {
@@ -55,13 +55,21 @@ export async function POST(request: Request) {
         `EMAIL: ${file.name}\n${dateInfo}${notesInfo}${file.content}\n`
       )
     } else if (file.type === 'audio' && file.content) {
-      // Include audio transcriptions if they exist (for future use)
+      // Include audio transcriptions if they exist
       const dateInfo = file.occurred_at
         ? `Date: ${new Date(file.occurred_at).toLocaleDateString()}\n`
         : ''
       const notesInfo = file.notes ? `Notes: ${file.notes}\n` : ''
       contentParts.push(
         `CALL TRANSCRIPTION: ${file.name}\n${dateInfo}${notesInfo}${file.content}\n`
+      )
+    } else if (file.type === 'transcript' && file.content) {
+      const dateInfo = file.occurred_at
+        ? `Date: ${new Date(file.occurred_at).toLocaleDateString()}\n`
+        : ''
+      const notesInfo = file.notes ? `Notes: ${file.notes}\n` : ''
+      contentParts.push(
+        `TRANSCRIPT: ${file.name}\n${dateInfo}${notesInfo}${file.content}\n`
       )
     }
   }
@@ -76,7 +84,7 @@ export async function POST(request: Request) {
   const combinedContent = contentParts.join('\n---\n\n')
 
   // Generate analysis with OpenAI
-  const prompt = `You are a sales preparation assistant. Analyze the following customer interactions (emails and call transcriptions) for ${customer.name} and create a comprehensive preparation document.
+  const prompt = `You are a sales preparation assistant. Analyze the following customer interactions (emails, transcripts, and call transcriptions) for ${customer.name} and create a comprehensive preparation document.
 
 The document should include:
 1. TL;DR - Key takeaways (5-7 bullet points)

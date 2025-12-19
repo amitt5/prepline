@@ -12,14 +12,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Sparkles, Phone, Mail } from "lucide-react"
+import { Sparkles, Phone, Mail, FileText } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface FileItem {
   id?: string
   name: string
   date: string
-  type: "audio" | "email"
+  type: "audio" | "email" | "transcript"
   content?: string | null
 }
 
@@ -30,14 +30,16 @@ export function GenerateAnalysisModal({ customerId, files }: { customerId: strin
   const [isGenerating, setIsGenerating] = useState(false)
 
   const handleGenerate = async () => {
-    // Filter to only email files for now (since we're skipping Whisper transcription)
-    const emailFiles = files.filter((f) => f.type === "email" && f.id)
-    const fileIds = emailFiles.map((f) => f.id!).filter(Boolean)
+    // Filter to files with content: emails, transcripts, and audio files that have been transcribed
+    const analyzableFiles = files.filter(
+      (f) => f.id && (f.type === "email" || f.type === "transcript" || (f.type === "audio" && f.content))
+    )
+    const fileIds = analyzableFiles.map((f) => f.id!).filter(Boolean)
 
     if (fileIds.length === 0) {
       toast({
-        title: "No email files available",
-        description: "Please upload email threads before generating an analysis.",
+        title: "No analyzable files available",
+        description: "Please upload email threads, transcripts, or transcribed audio files before generating an analysis.",
         variant: "destructive",
       })
       return
@@ -102,15 +104,17 @@ export function GenerateAnalysisModal({ customerId, files }: { customerId: strin
           <div className="max-h-64 overflow-y-auto space-y-2 border rounded-lg p-4">
             {files.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">
-                No files available. Upload email threads first.
+                No files available. Upload email threads, transcripts, or audio files first.
               </p>
             ) : (
               files.map((file, index) => (
                 <div key={file.id || index} className="flex items-center gap-3 text-sm">
                   {file.type === "audio" ? (
                     <Phone className="w-4 h-4 text-primary flex-shrink-0" />
-                  ) : (
+                  ) : file.type === "email" ? (
                     <Mail className="w-4 h-4 text-accent flex-shrink-0" />
+                  ) : (
+                    <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
                     <p className="truncate">{file.name}</p>
@@ -121,7 +125,7 @@ export function GenerateAnalysisModal({ customerId, files }: { customerId: strin
             )}
           </div>
           <p className="text-sm text-muted-foreground mt-4">
-            Analysis will include email threads and transcribed audio files.
+            Analysis will include email threads, transcripts, and transcribed audio files.
           </p>
           {files.filter((f) => f.type === "audio" && !f.content).length > 0 && (
             <p className="text-sm text-amber-500 mt-2">

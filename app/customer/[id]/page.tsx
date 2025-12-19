@@ -5,13 +5,13 @@ import { UploadFilesModal } from "@/components/upload-files-modal"
 import { GenerateAnalysisModal } from "@/components/generate-analysis-modal"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Phone, Mail, Download, Eye } from "lucide-react"
+import { ArrowLeft, Phone, Mail, Download, Eye, FileText } from "lucide-react"
 import { supabaseAdmin } from "@/lib/supabase/client"
 
 type FileRecord = {
   id: string
   name: string
-  type: "audio" | "email"
+  type: "audio" | "email" | "transcript"
   file_size?: number | null
   occurred_at?: string | null
   created_at?: string | null
@@ -154,8 +154,10 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                       <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
                         {file.type === "audio" ? (
                           <Phone className="w-5 h-5 text-primary flex-shrink-0" />
-                        ) : (
+                        ) : file.type === "email" ? (
                           <Mail className="w-5 h-5 text-accent flex-shrink-0" />
+                        ) : (
+                          <FileText className="w-5 h-5 text-blue-500 flex-shrink-0" />
                         )}
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{file.name}</p>
