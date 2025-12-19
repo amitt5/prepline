@@ -43,73 +43,225 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No files found' }, { status: 400 })
   }
 
-  // Prepare content for analysis
-  const contentParts: string[] = []
+  // Prepare transcripts for analysis (focusing on transcripts and call transcriptions)
+  const transcriptParts: string[] = []
   for (const file of files) {
-    if (file.type === 'email' && file.content) {
-      const dateInfo = file.occurred_at
-        ? `Date: ${new Date(file.occurred_at).toLocaleDateString()}\n`
-        : ''
-      const notesInfo = file.notes ? `Notes: ${file.notes}\n` : ''
-      contentParts.push(
-        `EMAIL: ${file.name}\n${dateInfo}${notesInfo}${file.content}\n`
-      )
-    } else if (file.type === 'audio' && file.content) {
-      // Include audio transcriptions if they exist
-      const dateInfo = file.occurred_at
-        ? `Date: ${new Date(file.occurred_at).toLocaleDateString()}\n`
-        : ''
-      const notesInfo = file.notes ? `Notes: ${file.notes}\n` : ''
-      contentParts.push(
-        `CALL TRANSCRIPTION: ${file.name}\n${dateInfo}${notesInfo}${file.content}\n`
-      )
-    } else if (file.type === 'transcript' && file.content) {
-      const dateInfo = file.occurred_at
-        ? `Date: ${new Date(file.occurred_at).toLocaleDateString()}\n`
-        : ''
-      const notesInfo = file.notes ? `Notes: ${file.notes}\n` : ''
-      contentParts.push(
-        `TRANSCRIPT: ${file.name}\n${dateInfo}${notesInfo}${file.content}\n`
-      )
+    if ((file.type === 'audio' && file.content) || (file.type === 'transcript' && file.content)) {
+      // Format timestamp from occurred_at or created_at
+      let timestamp = ''
+      if (file.occurred_at) {
+        timestamp = new Date(file.occurred_at).toISOString()
+      } else if (file.created_at) {
+        timestamp = new Date(file.created_at).toISOString()
+      }
+      
+      const dateInfo = timestamp ? `[${timestamp}] ` : ''
+      const notesInfo = file.notes ? `\nNotes: ${file.notes}\n` : ''
+      
+      // Format transcript with timestamp prefix if not already present
+      let transcriptContent = file.content
+      // If transcript doesn't start with a timestamp, prepend the file timestamp
+      if (timestamp && !transcriptContent.match(/^\[?\d{4}-\d{2}-\d{2}/)) {
+        transcriptContent = `${dateInfo}${transcriptContent}`
+      }
+      
+      transcriptParts.push(`${transcriptContent}${notesInfo}`)
     }
   }
 
-  if (contentParts.length === 0) {
+  if (transcriptParts.length === 0) {
     return NextResponse.json(
-      { error: 'No analyzable content found. Please ensure files have content.' },
+      { error: 'No analyzable transcripts found. Please ensure files have transcript content.' },
       { status: 400 }
     )
   }
 
-  const combinedContent = contentParts.join('\n---\n\n')
+  const combinedTranscripts = transcriptParts.join('\n\n---\n\n')
 
-  // Generate analysis with OpenAI
-  const prompt = `You are a sales preparation assistant. Analyze the following customer interactions (emails, transcripts, and call transcriptions) for ${customer.name} and create a comprehensive preparation document.
+  // Generate analysis with OpenAI using the new prompt structure
+  const systemPrompt = `You are an expert B2B enterprise sales strategist who specializes in complex, multi‑stakeholder deals. 
 
-The document should include:
-1. TL;DR - Key takeaways (5-7 bullet points)
-2. Stakeholder Map - Key people mentioned, their roles, concerns, and quotes
-3. Deal Status & Blockers - What's working, what's stalling, unanswered questions
-4. Next Call Strategy - Primary objective, key questions to ask, proof points to provide, objections to pre-empt
-5. Competitive Context - Alternatives being considered, your differentiation
-6. Key Risks - Potential issues to watch
+You will receive multiple call transcripts from the same opportunity. Treat them as ONE continuous story.
 
-Be specific, actionable, and reference exact quotes and timestamps when available.
+Your job is to synthesize, not summarize.
 
-Customer Interactions:
-${combinedContent}`
+Be precise, judgment‑based, and actionable.
+
+When unsure, state assumptions explicitly.`
+
+  const userPrompt = `You will receive transcripts below. Please analyze them as ONE bundle.
+
+========================
+
+TRANSCRIPTS START
+
+${combinedTranscripts}
+
+TRANSCRIPTS END
+
+========================
+
+Use ONLY facts inferred from the transcripts. Do not hallucinate.
+
+---------------------------------
+
+PART 1 — Stakeholder Psychological Map
+
+---------------------------------
+
+For EACH client‑side stakeholder mentioned, list:
+
+Name (or "Unknown Title / Role" if not given)
+
+Role / Function:
+
+Decision Power Level: (Decision Maker / Influencer / End‑User / Blocker / Unknown)
+
+Cares About (1–2 lines, concrete):
+
+Primary Fears / Risks (1–2 lines):
+
+Recurring Questions or Themes they raise:
+
+What they would need to believe to move forward:
+
+Evidence from transcript (include 2–5 direct quotes with timestamps per stakeholder):
+
+Format:
+
+[Stakeholder Name]
+
+- Role:
+
+- Decision Power:
+
+- Cares About:
+
+- Fears:
+
+- Repeatedly Asks:
+
+- Must Believe:
+
+- Evidence Quotes:
+
+   - "quote" (timestamp)
+
+---------------------------------
+
+PART 2 — Deal Physics & Dynamics
+
+---------------------------------
+
+Explain WHY this deal is moving / stuck in plain English. Avoid fluff.
+
+1️⃣ TL;DR (3–6 bullets)  
+
+• what is actually happening  
+
+• why it is stuck or risky  
+
+• what they emotionally believe about vendors
+
+2️⃣ Internal Dynamics
+
+- Who actually drives the decision vs who talks the most?
+
+- Where are disagreements internally?
+
+- Where do they feel operational pain the most?
+
+3️⃣ Proof from Transcript
+
+Provide 6–10 quotes w/ timestamps that demonstrate:
+
+- confusion
+
+- urgency
+
+- hesitation
+
+- excitement
+
+- risk concerns
+
+Label each quote with what it proves.
+
+---------------------------------
+
+PART 3 — Close Plan (Concrete + Practical)
+
+---------------------------------
+
+Write this as a playbook the founder / AE could actually follow.
+
+1️⃣ What the next phase should accomplish (3–5 bullets)
+
+2️⃣ Recommended meeting sequence
+
+   - Meeting 1 Goal:
+
+   - Who must attend:
+
+   - What must be shown:
+
+   - Expected outcome:
+
+   (repeat if multiple meetings)
+
+3️⃣ Risks & Failure Modes
+
+List the top 5 ways this deal could fail and how to pre‑empt.
+
+---------------------------------
+
+PART 4 — Positioning Strategy
+
+---------------------------------
+
+Explain how to position our product so the buyer emotionally believes we "get them."
+
+1️⃣ Core Positioning Sentence (1–2 lines)
+
+2️⃣ 3 Pillars messaging (tailored to THIS customer)
+
+For each pillar:
+
+- What they believe today
+
+- How we should frame ourselves
+
+- Proof they will care about this (with quotes)
+
+---------------------------------
+
+PART 5 — Executive Digest (Founder‑Friendly)
+
+---------------------------------
+
+Write a clear, human summary a founder can forward internally:
+
+"Here's what's going on"
+
+"Here's why they haven't bought yet"
+
+"Here's exactly what we should do next"
+
+Max 12 bullets.
+
+Plain english. No jargon.`
 
   try {
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4-turbo-preview', // Using gpt-4-turbo-preview (user mentioned gpt-4.1, this is the closest available)
+      model: 'gpt-4-turbo-preview',
       messages: [
         {
           role: 'system',
-          content: 'You are an expert sales preparation assistant. Create detailed, actionable preparation documents. Format your response with clear section headers using ## for main sections and ### for subsections.',
+          content: systemPrompt,
         },
         {
           role: 'user',
-          content: prompt,
+          content: userPrompt,
         },
       ],
       temperature: 0.7,
@@ -117,14 +269,13 @@ ${combinedContent}`
 
     const analysisContent = completion.choices[0]?.message?.content || ''
 
-    // Parse and structure the analysis (you can make this more sophisticated)
+    // Parse and structure the analysis based on the new 5-part structure
     const analysis = {
-      tldr: extractSection(analysisContent, 'TL;DR'),
-      stakeholders: extractSection(analysisContent, 'Stakeholder Map'),
-      dealStatus: extractSection(analysisContent, 'Deal Status'),
-      nextCallStrategy: extractSection(analysisContent, 'Next Call Strategy'),
-      competitiveContext: extractSection(analysisContent, 'Competitive Context'),
-      risks: extractSection(analysisContent, 'Key Risks'),
+      stakeholderMap: extractSection(analysisContent, 'PART 1', 'PART 2'),
+      dealPhysics: extractSection(analysisContent, 'PART 2', 'PART 3'),
+      closePlan: extractSection(analysisContent, 'PART 3', 'PART 4'),
+      positioningStrategy: extractSection(analysisContent, 'PART 4', 'PART 5'),
+      executiveDigest: extractSection(analysisContent, 'PART 5'),
       fullText: analysisContent,
     }
 
@@ -152,19 +303,25 @@ ${combinedContent}`
   }
 }
 
-function extractSection(text: string, sectionName: string): string {
-  // Try multiple patterns to extract sections
-  const patterns = [
-    new RegExp(`##\\s*${sectionName}[\\s\\S]*?(?=\\n##|$)`, 'i'),
-    new RegExp(`${sectionName}[\\s\\S]*?(?=\\n\\n##|$)`, 'i'),
-    new RegExp(`${sectionName}[\\s\\S]*?(?=\\n##|$)`, 'i'),
-  ]
+function extractSection(text: string, startMarker: string, endMarker?: string): string {
+  // Escape special regex characters in markers
+  const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const escapedStart = escapeRegex(startMarker)
   
-  for (const pattern of patterns) {
-    const match = text.match(pattern)
-    if (match) {
-      return match[0].trim()
-    }
+  let pattern: RegExp
+  
+  if (endMarker) {
+    // Extract section between two markers
+    const escapedEnd = escapeRegex(endMarker)
+    pattern = new RegExp(`${escapedStart}[\\s\\S]*?(?=${escapedEnd}|$)`, 'i')
+  } else {
+    // Extract section from marker to end
+    pattern = new RegExp(`${escapedStart}[\\s\\S]*$`, 'i')
+  }
+  
+  const match = text.match(pattern)
+  if (match) {
+    return match[0].trim()
   }
   
   return ''
